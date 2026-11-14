@@ -153,3 +153,7 @@ KC_MissionScene
     ├── ErrorWarningPanel (Flashing Red "ERROR / MASTER ALARM" overlay)
     ├── VideoRawImage (Displays VideoPlayer output for Exit Earth & Blast clips)
     └── MemorialEndingPanel (Kalpana Chawla Photo, Bio/Accident Text, Thank You, small Main Menu button)
+
+
+
+    this is important for the shivang mission 2 that is sopace shuttle mission 
