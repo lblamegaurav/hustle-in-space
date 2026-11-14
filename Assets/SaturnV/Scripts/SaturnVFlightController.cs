@@ -34,7 +34,6 @@ namespace SaturnV
         private float _initialY;
         private Rigidbody _rb;
         private AudioSource _audioSource;
-        private float _audioSampleRate = 44100;
         private System.Random _noiseGen = new System.Random();
 
         void Start()

@@ -14,7 +14,7 @@ namespace SpaceSim.Core
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void OnSceneLoaded()
         {
-            var existing = FindFirstObjectByType<SimulationBootstrapper>();
+            var existing = FindAnyObjectByType<SimulationBootstrapper>();
             if (existing != null) return;
 
             var managerGo = new GameObject("SpaceSim_RuntimeManager");
@@ -30,14 +30,14 @@ namespace SpaceSim.Core
             SetupCamera();
 
             // 3. Ensure Mission Palette Manager
-            var paletteMgr = FindFirstObjectByType<MissionPaletteManager>();
+            var paletteMgr = FindAnyObjectByType<MissionPaletteManager>();
             if (paletteMgr == null)
             {
                 paletteMgr = gameObject.AddComponent<MissionPaletteManager>();
             }
 
             // 4. Ensure Game Loading & Splash Manager
-            var loadingMgr = FindFirstObjectByType<GameLoadingManager>();
+            var loadingMgr = FindAnyObjectByType<GameLoadingManager>();
             if (loadingMgr == null)
             {
                 loadingMgr = gameObject.AddComponent<GameLoadingManager>();
@@ -71,7 +71,7 @@ namespace SpaceSim.Core
 
         private void SetupLighting()
         {
-            var lights = FindObjectsByType<Light>(FindObjectsSortMode.None);
+            var lights = FindObjectsByType<Light>(FindObjectsInactive.Exclude);
             bool hasDirLight = false;
             foreach (var l in lights)
             {
