@@ -111,10 +111,13 @@ class LiveRequestHandler(SimpleHTTPRequestHandler):
         super().end_headers()
 
     def log_message(self, format, *args):
-        # Quieter logging
-        if "/events" not in args[0] and ".mp4" not in args[0]:
-            sys.stdout.write(f"[{time.strftime('%H:%M:%S')}] {args[0]} -> {args[1]}\n")
-            sys.stdout.flush()
+        try:
+            msg = format % args
+            if "/events" not in msg and ".mp4" not in msg:
+                sys.stdout.write(f"[{time.strftime('%H:%M:%S')}] {msg}\n")
+                sys.stdout.flush()
+        except Exception:
+            pass
 
 def main():
     print("=" * 65)
