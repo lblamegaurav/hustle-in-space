@@ -118,6 +118,9 @@ namespace SpaceSim.Core
         public GameObject moonOrbitObject;
         public GameObject cockpitInteriorObject;
         public GameObject spaceSuitObject;
+        public GameObject acesSuitObject;
+        public GameObject pad39BGantryObject;
+        public GameObject lunarModuleObject;
 
         private void Awake()
         {
@@ -144,6 +147,8 @@ namespace SpaceSim.Core
             SetupCelestialBodies();
             SetupCockpitInterior();
             SetupSpaceSuitDisplay();
+            SetupPad39BGantry();
+            SetupLunarModule();
         }
 
         private void BuildCrawlerwayAndGround()
@@ -324,6 +329,52 @@ namespace SpaceSim.Core
                     spaceSuitObject.name = "Apollo_A7L_SpaceSuit_Display";
                     spaceSuitObject.transform.localScale = Vector3.one * 1.5f;
                     spaceSuitObject.transform.SetParent(environmentRoot, false);
+                }
+            }
+
+            var acesPrefab = Resources.Load<GameObject>("Models/ACES_Orange_SpaceSuit");
+            if (acesPrefab != null && acesSuitObject == null)
+            {
+                acesSuitObject = GameObject.Find("ACES_Orange_SpaceSuit_Display");
+                if (acesSuitObject == null)
+                {
+                    acesSuitObject = Instantiate(acesPrefab, new Vector3(205f, 5.0f, -10f), Quaternion.Euler(0, -45f, 0));
+                    acesSuitObject.name = "ACES_Orange_SpaceSuit_Display";
+                    acesSuitObject.transform.localScale = Vector3.one * 1.5f;
+                    acesSuitObject.transform.SetParent(environmentRoot, false);
+                }
+            }
+        }
+
+        private void SetupPad39BGantry()
+        {
+            var gantryPrefab = Resources.Load<GameObject>("Models/Gantry");
+            if (gantryPrefab != null && pad39BGantryObject == null)
+            {
+                pad39BGantryObject = GameObject.Find("Pad39B_Gantry_Tower");
+                if (pad39BGantryObject == null)
+                {
+                    pad39BGantryObject = Instantiate(gantryPrefab, new Vector3(195f, 0f, 0f), Quaternion.Euler(0, -90f, 0));
+                    pad39BGantryObject.name = "Pad39B_Gantry_Tower";
+                    pad39BGantryObject.transform.localScale = Vector3.one * 1.8f;
+                    pad39BGantryObject.transform.SetParent(environmentRoot, false);
+                }
+            }
+        }
+
+        private void SetupLunarModule()
+        {
+            var lmPrefab = Resources.Load<GameObject>("Models/Apollo_Lunar_Module");
+            if (lmPrefab != null && lunarModuleObject == null)
+            {
+                lunarModuleObject = GameObject.Find("Apollo_Lunar_Module_LM5");
+                if (lunarModuleObject == null)
+                {
+                    // Placed in lunar approach vicinity near Translunar Moon
+                    lunarModuleObject = Instantiate(lmPrefab, new Vector3(1480f, 2820f, 3150f), Quaternion.Euler(15f, 30f, 0));
+                    lunarModuleObject.name = "Apollo_Lunar_Module_LM5";
+                    lunarModuleObject.transform.localScale = Vector3.one * 4.0f;
+                    lunarModuleObject.transform.SetParent(environmentRoot, false);
                 }
             }
         }
