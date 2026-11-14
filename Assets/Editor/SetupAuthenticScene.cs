@@ -79,6 +79,19 @@ namespace SpaceSim.Editor
                 vab.transform.localScale = new Vector3(10f, 10f, 10f);
             }
 
+            // 6. Setup Complete Environment (Terrain, Cliffs, Trees, Orbital Earth, Moon, Cockpit)
+            var envMgr = Object.FindAnyObjectByType<Core.SpaceEnvironmentManager>();
+            if (envMgr == null)
+            {
+                var mgrGo = GameObject.Find("SpaceSim_RuntimeManager");
+                if (mgrGo == null) mgrGo = new GameObject("SpaceSim_RuntimeManager");
+                envMgr = mgrGo.AddComponent<Core.SpaceEnvironmentManager>();
+            }
+            if (envMgr != null)
+            {
+                envMgr.BuildCompleteEnvironment();
+            }
+
             EditorSceneManager.MarkSceneDirty(scene);
             EditorSceneManager.SaveOpenScenes();
             Debug.Log("[Space Sim] Authentic NASA Scene configured and saved successfully!");
