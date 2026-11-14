@@ -1,13 +1,15 @@
 using System.Collections;
+using System.IO;
 using UnityEngine;
 using UnityEngine.UI;
+using UnityEngine.Video;
 using SpaceSim.Core;
 
 namespace SpaceSim.UI
 {
     /// <summary>
     /// Handles the authentic aerospace boot loading screen and the first-time player tutorial modal.
-    /// Simulates telemetry subsystem boot-up with audio beeps and progress tracking.
+    /// Plays gameloading.mp4 full-screen with real-time telemetry overlays and audio.
     /// Manages PlayerPrefs persistence for onboarding so returning players jump straight to the mission palette.
     /// </summary>
     public class GameLoadingManager : MonoBehaviour
@@ -22,14 +24,19 @@ namespace SpaceSim.UI
         public GameObject splashPanel;
         public GameObject tutorialModal;
 
+        [Header("Video Player Elements")]
+        public VideoPlayer videoPlayer;
+        public RawImage videoDisplay;
+        private RenderTexture _videoRenderTexture;
+
         // Splash UI Elements
         private RectTransform _orbitLogoTransform;
         private Image _progressBarFill;
         private Text _progressPercentText;
         private Text _bootLogText;
+        private Button _skipButton;
 
-        // Tutorial UI Elements
-        private Button _dismissTutorialBtn;
+        private bool _isSkipped = false;
 
         private void Awake()
         {
@@ -39,19 +46,28 @@ namespace SpaceSim.UI
         private void Start()
         {
             BuildLoadingAndTutorialUI();
-            StartCoroutine(RunBootSequence());
+            StartCoroutine(RunBootSequenceWithVideo());
         }
 
         private void Update()
         {
-            // Spin the animated orbit logo in the loading screen
-            if (_orbitLogoTransform != null && splashPanel.activeSelf)
+            // Spin the backup animated orbit logo if active
+            if (_orbitLogoTransform != null && _orbitLogoTransform.gameObject.activeSelf)
             {
                 _orbitLogoTransform.Rotate(0, 0, -45f * Time.deltaTime);
             }
         }
 
-        private IEnumerator RunBootSequence()
+        private void OnDestroy()
+        {
+            if (_videoRenderTexture != null)
+            {
+                _videoRenderTexture.Release();
+                Destroy(_videoRenderTexture);
+            }
+        }
+
+        private IEnumerator RunBootSequenceWithVideo()
         {
             if (splashPanel != null) splashPanel.SetActive(true);
             if (tutorialModal != null) tutorialModal.SetActive(false);
@@ -66,14 +82,60 @@ namespace SpaceSim.UI
                 "ALL FLIGHT SYSTEMS NOMINAL — BOOT COMPLETE."
             };
 
-            float duration = 3.2f;
+            // Locate gameloading.mp4 in StreamingAssets or Project root
+            string videoPath = Path.Combine(Application.streamingAssetsPath, "gameloading.mp4");
+            if (!File.Exists(videoPath))
+            {
+                // Fallback to project root or assets
+                videoPath = Path.Combine(Application.dataPath, "Videos/gameloading.mp4");
+                if (!File.Exists(videoPath))
+                {
+                    videoPath = Path.Combine(Directory.GetCurrentDirectory(), "gameloading.mp4");
+                }
+            }
+
+            bool hasVideo = File.Exists(videoPath) && videoPlayer != null;
+
+            if (hasVideo)
+            {
+                Debug.Log($"<color=cyan><b>[GameLoadingManager]</b></color> Loading video background from: {videoPath}");
+                videoPlayer.url = videoPath;
+                videoPlayer.Prepare();
+
+                while (!videoPlayer.isPrepared && !_isSkipped)
+                {
+                    yield return null;
+                }
+
+                if (!_isSkipped)
+                {
+                    videoPlayer.Play();
+                    if (_orbitLogoTransform != null) _orbitLogoTransform.gameObject.SetActive(false);
+                }
+            }
+            else
+            {
+                Debug.LogWarning("<color=yellow><b>[GameLoadingManager]</b></color> Video file not found, falling back to vector boot animation.");
+                if (_orbitLogoTransform != null) _orbitLogoTransform.gameObject.SetActive(true);
+            }
+
+            float videoDuration = (hasVideo && videoPlayer.length > 0) ? (float)videoPlayer.length : 10.0f;
             float elapsed = 0f;
             int lastMsgIndex = -1;
 
-            while (elapsed < duration)
+            while (elapsed < videoDuration && !_isSkipped)
             {
                 elapsed += Time.deltaTime;
-                float progress = Mathf.Clamp01(elapsed / duration);
+
+                float progress = 0f;
+                if (hasVideo && videoPlayer.isPlaying && videoPlayer.length > 0)
+                {
+                    progress = Mathf.Clamp01((float)(videoPlayer.time / videoPlayer.length));
+                }
+                else
+                {
+                    progress = Mathf.Clamp01(elapsed / videoDuration);
+                }
 
                 if (_progressBarFill != null) _progressBarFill.fillAmount = progress;
                 if (_progressPercentText != null) _progressPercentText.text = $"{Mathf.RoundToInt(progress * 100f):000}%";
@@ -83,7 +145,7 @@ namespace SpaceSim.UI
                 {
                     lastMsgIndex = msgIndex;
                     if (_bootLogText != null) _bootLogText.text = $"> {bootMessages[msgIndex]}";
-                    SpaceSimAudio.Instance.PlayBeep(880f + msgIndex * 120f, 0.04f, 0.25f);
+                    SpaceSimAudio.Instance.PlayBeep(880f + msgIndex * 120f, 0.04f, 0.2f);
                 }
 
                 yield return null;
@@ -112,6 +174,15 @@ namespace SpaceSim.UI
                 {
                     MissionPaletteManager.Instance.ShowMissionSelect();
                 }
+            }
+        }
+
+        public void SkipLoading()
+        {
+            _isSkipped = true;
+            if (videoPlayer != null && videoPlayer.isPlaying)
+            {
+                videoPlayer.Stop();
             }
         }
 
@@ -209,73 +280,86 @@ namespace SpaceSim.UI
 
             var cg = splashPanel.AddComponent<CanvasGroup>();
 
-            // Center Content Container
-            var centerGo = new GameObject("CenterContainer");
-            centerGo.transform.SetParent(splashPanel.transform, false);
-            var centerRt = centerGo.AddComponent<RectTransform>();
-            centerRt.anchorMin = new Vector2(0.5f, 0.5f);
-            centerRt.anchorMax = new Vector2(0.5f, 0.5f);
-            centerRt.sizeDelta = new Vector2(650, 420);
-            centerRt.anchoredPosition = Vector2.zero;
+            // Video Player & RawImage Display (Full Screen Background)
+            var videoGo = new GameObject("VideoBackground");
+            videoGo.transform.SetParent(splashPanel.transform, false);
+            var videoRt = videoGo.AddComponent<RectTransform>();
+            videoRt.anchorMin = Vector2.zero;
+            videoRt.anchorMax = Vector2.one;
+            videoRt.offsetMin = Vector2.zero;
+            videoRt.offsetMax = Vector2.zero;
 
-            // Animated Orbit Ring Logo
-            var logoGo = new GameObject("OrbitLogo");
-            logoGo.transform.SetParent(centerGo.transform, false);
-            _orbitLogoTransform = logoGo.AddComponent<RectTransform>();
-            _orbitLogoTransform.sizeDelta = new Vector2(100, 100);
-            _orbitLogoTransform.anchoredPosition = new Vector2(0, 110);
+            videoDisplay = videoGo.AddComponent<RawImage>();
+            videoDisplay.color = Color.white;
 
-            var logoOutline = logoGo.AddComponent<Outline>();
-            logoOutline.effectColor = new Color(0f, 0.85f, 1f, 0.8f);
-            logoOutline.effectDistance = new Vector2(2, 2);
+            // Setup RenderTexture for Video
+            _videoRenderTexture = new RenderTexture(1280, 720, 0, RenderTextureFormat.ARGB32);
+            _videoRenderTexture.Create();
+            videoDisplay.texture = _videoRenderTexture;
 
-            var ringImg = logoGo.AddComponent<Image>();
-            ringImg.color = new Color(0.05f, 0.25f, 0.45f, 0.5f);
+            // Video Player component
+            videoPlayer = videoGo.AddComponent<VideoPlayer>();
+            videoPlayer.playOnAwake = false;
+            videoPlayer.renderMode = VideoRenderMode.RenderTexture;
+            videoPlayer.targetTexture = _videoRenderTexture;
+            videoPlayer.audioOutputMode = VideoAudioOutputMode.AudioSource;
+            var audioSource = videoGo.AddComponent<AudioSource>();
+            audioSource.playOnAwake = false;
+            audioSource.spatialBlend = 0f;
+            videoPlayer.SetTargetAudioSource(0, audioSource);
 
-            // Orbiting Dot
-            var dotGo = new GameObject("OrbitDot");
-            dotGo.transform.SetParent(logoGo.transform, false);
-            var dotRt = dotGo.AddComponent<RectTransform>();
-            dotRt.sizeDelta = new Vector2(14, 14);
-            dotRt.anchoredPosition = new Vector2(44, 0);
-            var dotImg = dotGo.AddComponent<Image>();
-            dotImg.color = new Color(0.1f, 1f, 0.8f);
+            // Skip Button in Top-Right
+            var skipGo = new GameObject("SkipBtn");
+            skipGo.transform.SetParent(splashPanel.transform, false);
+            var skipRt = skipGo.AddComponent<RectTransform>();
+            skipRt.anchorMin = new Vector2(1, 1);
+            skipRt.anchorMax = new Vector2(1, 1);
+            skipRt.pivot = new Vector2(1, 1);
+            skipRt.sizeDelta = new Vector2(110, 36);
+            skipRt.anchoredPosition = new Vector2(-25, -25);
 
-            // Simulation Title
-            var titleGo = new GameObject("Title");
-            titleGo.transform.SetParent(centerGo.transform, false);
-            var titleText = titleGo.AddComponent<Text>();
-            titleText.font = font;
-            titleText.fontSize = 24;
-            titleText.fontStyle = FontStyle.Bold;
-            titleText.alignment = TextAnchor.MiddleCenter;
-            titleText.color = Color.white;
-            titleText.text = "NASA AEROSPACE SIMULATION SYSTEMS";
+            var skipImg = skipGo.AddComponent<Image>();
+            skipImg.color = new Color(0.05f, 0.08f, 0.12f, 0.75f);
+            var skipOutline = skipGo.AddComponent<Outline>();
+            skipOutline.effectColor = new Color(0.2f, 0.5f, 0.8f, 0.6f);
 
-            var titleRt = titleGo.GetComponent<RectTransform>();
-            titleRt.sizeDelta = new Vector2(600, 36);
-            titleRt.anchoredPosition = new Vector2(0, 30);
+            _skipButton = skipGo.AddComponent<Button>();
+            _skipButton.onClick.AddListener(SkipLoading);
 
-            // Subtitle
-            var subGo = new GameObject("Subtitle");
-            subGo.transform.SetParent(centerGo.transform, false);
-            var subText = subGo.AddComponent<Text>();
-            subText.font = font;
-            subText.fontSize = 13;
-            subText.alignment = TextAnchor.MiddleCenter;
-            subText.color = new Color(0.5f, 0.75f, 0.9f);
-            subText.text = "APOLLO 11 SATURN V  &  STS-107 SPACE SHUTTLE COLUMBIA";
+            var skipTxtGo = new GameObject("Label");
+            skipTxtGo.transform.SetParent(skipGo.transform, false);
+            var skipTxt = skipTxtGo.AddComponent<Text>();
+            skipTxt.font = font;
+            skipTxt.fontSize = 12;
+            skipTxt.fontStyle = FontStyle.Bold;
+            skipTxt.alignment = TextAnchor.MiddleCenter;
+            skipTxt.color = new Color(0.8f, 0.9f, 1.0f);
+            skipTxt.text = "SKIP ⏭";
+            var skipTxtRt = skipTxtGo.GetComponent<RectTransform>();
+            skipTxtRt.anchorMin = Vector2.zero;
+            skipTxtRt.anchorMax = Vector2.one;
+            skipTxtRt.sizeDelta = Vector2.zero;
 
-            var subRt = subGo.GetComponent<RectTransform>();
-            subRt.sizeDelta = new Vector2(600, 24);
-            subRt.anchoredPosition = new Vector2(0, 0);
+            // Telemetry & Progress Overlay (Bottom Dock of Loading Screen)
+            var bottomDockGo = new GameObject("BottomTelemetryDock");
+            bottomDockGo.transform.SetParent(splashPanel.transform, false);
+            var bottomRt = bottomDockGo.AddComponent<RectTransform>();
+            bottomRt.anchorMin = new Vector2(0, 0);
+            bottomRt.anchorMax = new Vector2(1, 0);
+            bottomRt.pivot = new Vector2(0.5f, 0);
+            bottomRt.sizeDelta = new Vector2(0, 140);
+
+            var bottomBg = bottomDockGo.AddComponent<Image>();
+            bottomBg.color = new Color(0.02f, 0.04f, 0.06f, 0.82f); // Glassmorphism backdrop
 
             // Progress Bar Background
             var barBgGo = new GameObject("ProgressBarBg");
-            barBgGo.transform.SetParent(centerGo.transform, false);
+            barBgGo.transform.SetParent(bottomDockGo.transform, false);
             var barBgRt = barBgGo.AddComponent<RectTransform>();
-            barBgRt.sizeDelta = new Vector2(500, 10);
-            barBgRt.anchoredPosition = new Vector2(0, -60);
+            barBgRt.anchorMin = new Vector2(0.5f, 0.5f);
+            barBgRt.anchorMax = new Vector2(0.5f, 0.5f);
+            barBgRt.sizeDelta = new Vector2(700, 10);
+            barBgRt.anchoredPosition = new Vector2(0, 15);
 
             var barBgImg = barBgGo.AddComponent<Image>();
             barBgImg.color = new Color(0.12f, 0.16f, 0.22f);
@@ -296,7 +380,7 @@ namespace SpaceSim.UI
 
             // Percent Text
             var pctGo = new GameObject("PercentText");
-            pctGo.transform.SetParent(centerGo.transform, false);
+            pctGo.transform.SetParent(bottomDockGo.transform, false);
             _progressPercentText = pctGo.AddComponent<Text>();
             _progressPercentText.font = font;
             _progressPercentText.fontSize = 13;
@@ -306,22 +390,26 @@ namespace SpaceSim.UI
             _progressPercentText.text = "000%";
 
             var pctRt = pctGo.GetComponent<RectTransform>();
+            pctRt.anchorMin = new Vector2(0.5f, 0.5f);
+            pctRt.anchorMax = new Vector2(0.5f, 0.5f);
             pctRt.sizeDelta = new Vector2(100, 24);
-            pctRt.anchoredPosition = new Vector2(0, -82);
+            pctRt.anchoredPosition = new Vector2(0, -10);
 
             // Telemetry Log Text
             var logGo = new GameObject("BootLogText");
-            logGo.transform.SetParent(centerGo.transform, false);
+            logGo.transform.SetParent(bottomDockGo.transform, false);
             _bootLogText = logGo.AddComponent<Text>();
             _bootLogText.font = font;
             _bootLogText.fontSize = 12;
             _bootLogText.alignment = TextAnchor.MiddleCenter;
-            _bootLogText.color = new Color(0.7f, 0.8f, 0.85f);
+            _bootLogText.color = new Color(0.7f, 0.82f, 0.92f);
             _bootLogText.text = "> INITIALIZING FLIGHT SYSTEMS...";
 
             var logRt = logGo.GetComponent<RectTransform>();
-            logRt.sizeDelta = new Vector2(600, 24);
-            logRt.anchoredPosition = new Vector2(0, -115);
+            logRt.anchorMin = new Vector2(0.5f, 0.5f);
+            logRt.anchorMax = new Vector2(0.5f, 0.5f);
+            logRt.sizeDelta = new Vector2(800, 24);
+            logRt.anchoredPosition = new Vector2(0, -35);
         }
 
         private void BuildTutorialModal(Transform parent, Font font)
@@ -336,7 +424,7 @@ namespace SpaceSim.UI
             rt.offsetMax = Vector2.zero;
 
             var bg = tutorialModal.AddComponent<Image>();
-            bg.color = new Color(0f, 0f, 0f, 0.85f); // Dimmed backdrop
+            bg.color = new Color(0f, 0f, 0f, 0.88f); // Dimmed backdrop
 
             // Modal Card Box
             var cardGo = new GameObject("ModalCard");
