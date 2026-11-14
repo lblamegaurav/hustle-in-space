@@ -1,0 +1,1055 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hustle in Space - Live Simulation & Mission Palette</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@500;700;900&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #07090e;
+      --card-bg: rgba(13, 19, 32, 0.88);
+      --border: rgba(56, 189, 248, 0.28);
+      --cyan: #38bdf8;
+      --cyan-glow: rgba(56, 189, 248, 0.45);
+      --orange: #f97316;
+      --orange-glow: rgba(249, 115, 22, 0.45);
+      --green: #22c55e;
+      --text-dim: #94a3b8;
+      --text-bright: #f8fafc;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
+    body, html {
+      width: 100%; height: 100%;
+      overflow: hidden;
+      background-color: var(--bg);
+      font-family: 'Inter', sans-serif;
+      color: var(--text-bright);
+    }
+
+    /* 3D WebGL Canvas */
+    #viewport-container {
+      position: absolute; top: 0; left: 0;
+      width: 100%; height: 100%;
+      z-index: 1;
+    }
+
+    /* Video Splash Screen */
+    #splash-screen {
+      position: absolute; top: 0; left: 0;
+      width: 100%; height: 100%;
+      background: #000;
+      z-index: 100;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      transition: opacity 0.8s ease, visibility 0.8s ease;
+    }
+    #splash-video {
+      position: absolute; top: 0; left: 0;
+      width: 100%; height: 100%;
+      object-fit: cover;
+      opacity: 0.9;
+    }
+    .splash-overlay {
+      position: relative; z-index: 2;
+      display: flex; flex-direction: column;
+      align-items: center; text-align: center;
+      background: radial-gradient(circle, rgba(7,10,18,0.75) 0%, rgba(7,10,18,0.95) 100%);
+      padding: 40px 60px;
+      border-radius: 16px;
+      border: 1px solid var(--border);
+      box-shadow: 0 0 50px rgba(0,0,0,0.8), 0 0 30px var(--cyan-glow);
+      backdrop-filter: blur(8px);
+      max-width: 650px;
+      width: 90%;
+    }
+    .splash-title {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 26px;
+      font-weight: 900;
+      letter-spacing: 3px;
+      color: #fff;
+      text-transform: uppercase;
+      text-shadow: 0 0 15px var(--cyan);
+      margin-bottom: 8px;
+    }
+    .splash-subtitle {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 13px;
+      letter-spacing: 2px;
+      color: var(--cyan);
+      margin-bottom: 24px;
+    }
+    .progress-bar-container {
+      width: 100%;
+      height: 12px;
+      background: rgba(255,255,255,0.08);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      overflow: hidden;
+      margin-bottom: 12px;
+      position: relative;
+    }
+    .progress-bar-fill {
+      height: 100%; width: 0%;
+      background: linear-gradient(90deg, #0284c7, var(--cyan));
+      box-shadow: 0 0 12px var(--cyan);
+      transition: width 0.1s linear;
+    }
+    .splash-status {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 13px;
+      color: var(--text-dim);
+      display: flex; justify-content: space-between;
+      width: 100%;
+      margin-bottom: 20px;
+    }
+    .skip-btn {
+      background: rgba(56, 189, 248, 0.15);
+      border: 1px solid var(--cyan);
+      color: var(--cyan);
+      font-family: 'Orbitron', sans-serif;
+      font-size: 12px;
+      letter-spacing: 1.5px;
+      padding: 10px 24px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .skip-btn:hover {
+      background: var(--cyan);
+      color: #000;
+      box-shadow: 0 0 20px var(--cyan);
+    }
+
+    /* Briefing Modal */
+    #briefing-modal {
+      position: absolute; top: 0; left: 0;
+      width: 100%; height: 100%;
+      background: rgba(0,0,0,0.85);
+      backdrop-filter: blur(10px);
+      z-index: 90;
+      display: none;
+      align-items: center; justify-content: center;
+    }
+    .briefing-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      box-shadow: 0 0 40px rgba(0,0,0,0.9), 0 0 25px var(--cyan-glow);
+      border-radius: 14px;
+      width: 90%; max-width: 620px;
+      padding: 30px;
+    }
+    .briefing-card h2 {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 20px;
+      color: var(--cyan);
+      letter-spacing: 2px;
+      margin-bottom: 15px;
+      display: flex; align-items: center; gap: 10px;
+    }
+    .briefing-list {
+      list-style: none; margin-bottom: 24px;
+    }
+    .briefing-list li {
+      font-size: 13px; color: #cbd5e1;
+      padding: 10px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+      display: flex; gap: 12px;
+    }
+    .briefing-list li strong { color: #fff; min-width: 110px; }
+
+    /* HUD UI Overlay */
+    .hud-layer {
+      position: absolute; top: 0; left: 0;
+      width: 100%; height: 100%;
+      z-index: 10;
+      pointer-events: none;
+      display: flex; flex-direction: column;
+      justify-content: space-between;
+      padding: 20px;
+    }
+    .pointer-events-auto { pointer-events: auto; }
+
+    /* Top Bar */
+    .top-bar {
+      display: flex; justify-content: space-between; align-items: flex-start;
+      width: 100%;
+    }
+    .brand-box {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      padding: 12px 20px;
+      border-radius: 10px;
+      backdrop-filter: blur(8px);
+      box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+    }
+    .brand-title {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 18px; font-weight: 900;
+      letter-spacing: 2px;
+      color: #fff;
+    }
+    .brand-meta {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 11px; color: var(--cyan);
+      letter-spacing: 1px;
+    }
+
+    /* Mission Switcher */
+    .mission-pills {
+      display: flex; gap: 12px;
+    }
+    .mission-btn {
+      background: rgba(13, 19, 32, 0.85);
+      border: 1px solid rgba(255,255,255,0.15);
+      color: var(--text-dim);
+      font-family: 'Orbitron', sans-serif;
+      font-size: 12px; font-weight: 700;
+      letter-spacing: 1px;
+      padding: 12px 22px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.25s ease;
+      backdrop-filter: blur(8px);
+    }
+    .mission-btn:hover {
+      border-color: var(--cyan);
+      color: #fff;
+    }
+    .mission-btn.active {
+      background: rgba(56, 189, 248, 0.18);
+      border-color: var(--cyan);
+      color: #fff;
+      box-shadow: 0 0 20px var(--cyan-glow);
+    }
+
+    /* Right Inspection Dock */
+    .right-dock {
+      position: absolute; right: 20px; top: 90px; bottom: 100px;
+      width: 380px;
+      display: flex; flex-direction: column; gap: 14px;
+      overflow-y: auto;
+    }
+    .panel {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 18px;
+      backdrop-filter: blur(10px);
+      box-shadow: 0 8px 30px rgba(0,0,0,0.6);
+    }
+    .panel-header {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 13px; font-weight: 700;
+      letter-spacing: 1.5px;
+      color: var(--cyan);
+      text-transform: uppercase;
+      margin-bottom: 12px;
+      display: flex; justify-content: space-between; align-items: center;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+      padding-bottom: 8px;
+    }
+    .stage-item {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 10px 14px;
+      border-radius: 8px;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.06);
+      margin-bottom: 6px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .stage-item:hover {
+      background: rgba(56, 189, 248, 0.1);
+      border-color: var(--cyan);
+    }
+    .stage-item.selected {
+      background: rgba(56, 189, 248, 0.22);
+      border-color: var(--cyan);
+      box-shadow: 0 0 12px var(--cyan-glow);
+    }
+    .stage-name { font-size: 13px; font-weight: 600; }
+    .stage-badge {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 10px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: rgba(255,255,255,0.1);
+      color: var(--text-dim);
+    }
+    .stage-badge.verified {
+      background: rgba(34, 197, 94, 0.2);
+      color: var(--green);
+      border: 1px solid rgba(34, 197, 94, 0.4);
+    }
+
+    /* Spec Dossier */
+    .spec-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+      margin-top: 10px;
+    }
+    .spec-cell {
+      background: rgba(0,0,0,0.3);
+      padding: 8px 10px;
+      border-radius: 6px;
+      border-left: 2px solid var(--cyan);
+    }
+    .spec-label {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 10px; color: var(--text-dim);
+      text-transform: uppercase;
+    }
+    .spec-val {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 13px; color: #fff; font-weight: 700;
+      margin-top: 2px;
+    }
+
+    /* Bottom Control Bar */
+    .bottom-bar {
+      display: flex; justify-content: space-between; align-items: center;
+      width: 100%;
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px 24px;
+      backdrop-filter: blur(10px);
+    }
+    .telemetry-cluster {
+      display: flex; gap: 24px;
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 12px;
+    }
+    .telemetry-item strong { color: var(--cyan); margin-right: 6px; }
+
+    .rollout-btn {
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.15);
+      color: var(--text-dim);
+      font-family: 'Orbitron', sans-serif;
+      font-size: 13px; font-weight: 900;
+      letter-spacing: 2px;
+      padding: 12px 28px;
+      border-radius: 8px;
+      cursor: not-allowed;
+      transition: all 0.3s;
+    }
+    .rollout-btn.ready {
+      background: linear-gradient(135deg, #16a34a, #22c55e);
+      border-color: #4ade80;
+      color: #000;
+      cursor: pointer;
+      box-shadow: 0 0 25px rgba(34, 197, 94, 0.6);
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); box-shadow: 0 0 20px rgba(34,197,94,0.5); }
+      50% { transform: scale(1.03); box-shadow: 0 0 35px rgba(34,197,94,0.8); }
+    }
+
+    /* Live-Reload Badge */
+    .live-badge {
+      position: absolute; bottom: 20px; left: 20px;
+      display: flex; align-items: center; gap: 8px;
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 11px; color: var(--green);
+      background: rgba(13, 19, 32, 0.9);
+      padding: 6px 12px; border-radius: 20px;
+      border: 1px solid rgba(34, 197, 94, 0.3);
+      z-index: 50;
+    }
+    .live-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 8px var(--green);
+      animation: blink 1.5s infinite;
+    }
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- WebGL 3D Viewport -->
+  <div id="viewport-container"></div>
+
+  <!-- Video Splash & Loading Screen -->
+  <div id="splash-screen">
+    <video id="splash-video" playsinline muted preload="auto" loop>
+      <source src="/Assets/Videos/gameloading.mp4" type="video/mp4">
+      <source src="/Assets/StreamingAssets/gameloading.mp4" type="video/mp4">
+    </video>
+    <div class="splash-overlay">
+      <h1 class="splash-title">Hustle In Space</h1>
+      <div class="splash-subtitle">NASA HIGH-FIDELITY FLIGHT & MISSION SYSTEM</div>
+      
+      <div class="progress-bar-container">
+        <div class="progress-bar-fill" id="progress-fill"></div>
+      </div>
+
+      <div class="splash-status">
+        <span id="load-label">STREAMING INTRO VIDEO...</span>
+        <span id="load-pct">0%</span>
+      </div>
+
+      <button class="skip-btn" id="skip-btn" onclick="finishSplash()">SKIP TO PALETTE (ESC)</button>
+    </div>
+  </div>
+
+  <!-- Pilot Flight Briefing Modal -->
+  <div id="briefing-modal">
+    <div class="briefing-card pointer-events-auto">
+      <h2>🚀 PILOT FLIGHT BRIEFING</h2>
+      <ul class="briefing-list">
+        <li><strong>BLENDER CAMERA:</strong> Left-Click drag to Orbit, Right-Click drag to Pan, Wheel to Zoom.</li>
+        <li><strong>STAGE INSPECTION:</strong> Click any module in the right dock to frame in 3D and verify NASA specs.</li>
+        <li><strong>ROLLOUT GATE:</strong> Inspect all rocket modules to unlock Rollout Authorization for launch.</li>
+        <li><strong>LIVE SERVER:</strong> Instant reload active — save any file to see changes updated automatically.</li>
+      </ul>
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <label style="font-size:12px; color:var(--text-dim); display:flex; align-items:center; gap:8px; cursor:pointer;">
+          <input type="checkbox" id="dont-show-again"> Don't show again
+        </label>
+        <button class="skip-btn" onclick="closeBriefing()">PROCEED TO MISSIONS</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Live Reload Indicator -->
+  <div class="live-badge">
+    <div class="live-dot"></div>
+    <span>LIVE RELOAD ACTIVE (HOT UPDATE ON SAVE)</span>
+  </div>
+
+  <!-- Main HUD Layer -->
+  <div class="hud-layer">
+    <!-- Top Bar -->
+    <div class="top-bar">
+      <div class="brand-box pointer-events-auto">
+        <div class="brand-title">HUSTLE IN SPACE</div>
+        <div class="brand-meta">SIMULATION ENGINE • NASA HISTORICAL CATALOG</div>
+      </div>
+
+      <div class="mission-pills pointer-events-auto">
+        <button class="mission-btn active" id="btn-m1" onclick="switchMission(1)">
+          MISSION 01: SATURN V (APOLLO 11)
+        </button>
+        <button class="mission-btn" id="btn-m2" onclick="switchMission(2)">
+          MISSION 02: SPACE SHUTTLE (STS-107)
+        </button>
+      </div>
+    </div>
+
+    <!-- Right Inspection Dock -->
+    <div class="right-dock pointer-events-auto">
+      <div class="panel">
+        <div class="panel-header">
+          <span id="dock-title">SATURN V HIERARCHY</span>
+          <span id="dock-counter" style="color:var(--text-dim); font-size:11px;">0/6 VERIFIED</span>
+        </div>
+        <div id="stage-list"></div>
+      </div>
+
+      <div class="panel" id="spec-panel">
+        <div class="panel-header">
+          <span>MODULE SPECIFICATION</span>
+          <span id="selected-module-badge" style="color:var(--cyan); font-size:10px;">STAGE 1</span>
+        </div>
+        <div id="spec-content">
+          <div style="color:var(--text-dim); font-size:12px;">Select a stage above to inspect NASA engineering telemetry.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bottom Telemetry & Rollout Bar -->
+    <div class="bottom-bar pointer-events-auto">
+      <div class="telemetry-cluster">
+        <div class="telemetry-item"><strong>MET:</strong><span id="met-clock">00:00:00</span></div>
+        <div class="telemetry-item"><strong>VEHICLE:</strong><span id="veh-name">SATURN V SA-506</span></div>
+        <div class="telemetry-item"><strong>STATUS:</strong><span id="veh-status" style="color:var(--orange);">STANDBY FOR ROLLOUT</span></div>
+        <div class="telemetry-item"><strong>CAMERA:</strong><span>BLENDER 3D ORBIT</span></div>
+      </div>
+
+      <button class="rollout-btn" id="rollout-btn" onclick="triggerRollout()">
+        AUTHORIZE ROLLOUT
+      </button>
+    </div>
+  </div>
+
+  <script>
+    /* =========================================================================
+       AUDIO SYNTHESIZER (Web Audio API - Procedural NASA Audio)
+       ========================================================================= */
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    let audioCtx = null;
+    function playBeep(freq = 880, duration = 0.08, type = 'sine') {
+      try {
+        if (!audioCtx) audioCtx = new AudioContext();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+        gain.gain.setValueAtTime(0.12, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + duration);
+      } catch(e) {}
+    }
+
+    /* =========================================================================
+       NASA MISSION DATA (from SaturnV.md and SpaceShuttle.md)
+       ========================================================================= */
+    const MISSIONS = {
+      1: {
+        id: 1,
+        name: "Apollo 11 / Saturn V",
+        vehicle: "SATURN V (SA-506)",
+        description: "Historic Apollo lunar landing stack standing 110.6 meters tall with 34.5 MN liftoff thrust.",
+        stages: [
+          {
+            id: "s1", name: "S-IC First Stage", tag: "BOOSTER",
+            specs: { "Thrust": "34.5 MN (5x F-1)", "Burn Time": "168 sec", "Propellant": "RP-1 / LOX", "Gross Mass": "2,280,000 kg", "ISP (Vac)": "304 s" },
+            meshOffset: -22, meshHeight: 42
+          },
+          {
+            id: "s2", name: "S-II Second Stage", tag: "UPPER",
+            specs: { "Thrust": "5.0 MN (5x J-2)", "Burn Time": "360 sec", "Propellant": "LH2 / LOX", "Gross Mass": "480,000 kg", "ISP (Vac)": "421 s" },
+            meshOffset: 6, meshHeight: 25
+          },
+          {
+            id: "s3", name: "S-IVB Third Stage", tag: "INSERTION",
+            specs: { "Thrust": "1.0 MN (1x J-2)", "Burn Time": "165+335 sec", "Propellant": "LH2 / LOX", "Gross Mass": "120,000 kg", "ISP (Vac)": "421 s" },
+            meshOffset: 23, meshHeight: 18
+          },
+          {
+            id: "iu", name: "Instrument Unit", tag: "GUIDANCE",
+            specs: { "Manufacturer": "IBM", "Diameter": "6.6 m", "Height": "0.9 m", "Mass": "1,996 kg", "System": "LVDC Digital Computer" },
+            meshOffset: 33, meshHeight: 4
+          },
+          {
+            id: "csm", name: "Command & Service Module", tag: "CREW",
+            specs: { "Thrust (SPS)": "91 kN", "Crew": "3 Astronauts", "Diameter": "3.9 m", "Heat Shield": "Avcoat Phenolic Epoxy", "Mass": "30,300 kg" },
+            meshOffset: 38, meshHeight: 12
+          },
+          {
+            id: "les", name: "Launch Escape System", tag: "ABORT",
+            specs: { "Thrust": "654 kN", "Burn Time": "3.2 sec", "Tower Height": "10 m", "Function": "High-altitude crew abort", "Mass": "4,170 kg" },
+            meshOffset: 48, meshHeight: 14
+          }
+        ]
+      },
+      2: {
+        id: 2,
+        name: "STS-107 Space Shuttle Columbia",
+        vehicle: "OV-102 (SPACE SHUTTLE COLUMBIA)",
+        description: "Re-usable orbital spaceplane with twin Solid Rocket Boosters, External Tank, and RS-25 cluster.",
+        stages: [
+          {
+            id: "srb", name: "Solid Rocket Boosters (Twin)", tag: "BOOSTER",
+            specs: { "Thrust": "2x 12.0 MN (24 MN)", "Burn Time": "124 sec", "Propellant": "APCP Solid", "Length": "45.5 m", "Diameter": "3.7 m" },
+            meshOffset: -2, meshHeight: 45
+          },
+          {
+            id: "et", name: "External Tank (SLWT)", tag: "FUEL",
+            specs: { "Propellant": "LH2 (104t) + LOX (626t)", "Capacity": "735,000 kg", "Length": "46.9 m", "Diameter": "8.4 m", "Insulation": "Spray Foam" },
+            meshOffset: 0, meshHeight: 47
+          },
+          {
+            id: "orb", name: "Orbiter Columbia", tag: "ORBITER",
+            specs: { "Wingspan": "23.79 m", "Length": "37.24 m", "Payload Bay": "4.6 x 18.3 m", "TPS Tiles": "24,000+ HRSI/LRSI", "Dry Mass": "68,500 kg" },
+            meshOffset: -5, meshHeight: 37
+          },
+          {
+            id: "ssme", name: "RS-25 SSME Cluster", tag: "ENGINES",
+            specs: { "Quantity": "3x RS-25 Engines", "Total Thrust": "5.25 MN (Vac)", "ISP (Vac)": "452 s", "Throttle": "67% to 109%", "Propellant": "LH2 / LOX" },
+            meshOffset: -20, meshHeight: 10
+          }
+        ]
+      }
+    };
+
+    let currentMission = 1;
+    let verifiedStages = new Set();
+    let selectedStageId = null;
+
+    /* =========================================================================
+       THREE.JS 3D SCENE SETUP
+       ========================================================================= */
+    const container = document.getElementById('viewport-container');
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x06080e);
+    scene.fog = new THREE.FogExp2(0x06080e, 0.0035);
+
+    const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.5, 2000);
+    camera.position.set(0, 15, 110);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.shadowMap.enabled = true;
+    container.appendChild(renderer.domElement);
+
+    // Blender Orbit Controls
+    const controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.08;
+    controls.screenSpacePanning = true;
+    controls.minDistance = 20;
+    controls.maxDistance = 350;
+    controls.target.set(0, 10, 0);
+
+    // Lighting
+    const ambientLight = new THREE.AmbientLight(0x223344, 1.2);
+    scene.add(ambientLight);
+
+    const sunLight = new THREE.DirectionalLight(0xffffff, 2.2);
+    sunLight.position.set(60, 100, 80);
+    sunLight.castShadow = true;
+    scene.add(sunLight);
+
+    const rimLight = new THREE.DirectionalLight(0x38bdf8, 1.0);
+    rimLight.position.set(-60, 40, -60);
+    scene.add(rimLight);
+
+    // Starfield
+    const starGeo = new THREE.BufferGeometry();
+    const starCoords = [];
+    for(let i=0; i<3000; i++) {
+      starCoords.push(
+        (Math.random() - 0.5) * 1500,
+        (Math.random() - 0.5) * 1500,
+        (Math.random() - 0.5) * 1500
+      );
+    }
+    starGeo.setAttribute('position', new THREE.Float32BufferAttribute(starCoords, 3));
+    const starMat = new THREE.PointsMaterial({ color: 0x94a3b8, size: 1.5, transparent: true, opacity: 0.7 });
+    const stars = new THREE.Points(starGeo, starMat);
+    scene.add(stars);
+
+    // Launch Pad Grid
+    const grid = new THREE.GridHelper(300, 50, 0x38bdf8, 0x1e293b);
+    grid.position.y = -50;
+    scene.add(grid);
+
+    // 3D Model Root Containers
+    const saturnGroup = new THREE.Group();
+    const shuttleGroup = new THREE.Group();
+    scene.add(saturnGroup);
+    scene.add(shuttleGroup);
+
+    // Materials
+    const whiteMat = new THREE.MeshStandardMaterial({ color: 0xeeeeee, roughness: 0.35, metalness: 0.1 });
+    const blackMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.5 });
+    const orangeMat = new THREE.MeshStandardMaterial({ color: 0xd97706, roughness: 0.65 }); // External tank orange
+    const metalMat = new THREE.MeshStandardMaterial({ color: 0x64748b, roughness: 0.2, metalness: 0.8 });
+    const engineMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.4, metalness: 0.9 });
+    const glassMat = new THREE.MeshStandardMaterial({ color: 0x0284c7, roughness: 0.1, metalness: 0.9 });
+
+    /* =========================================================================
+       BUILD PROCEDURAL SATURN V (APOLLO 11)
+       ========================================================================= */
+    const saturnParts = {};
+    function buildSaturnV() {
+      // S-IC First Stage
+      const s1Group = new THREE.Group();
+      const s1Body = new THREE.Mesh(new THREE.CylinderGeometry(5.0, 5.0, 42, 32), whiteMat);
+      s1Group.add(s1Body);
+      // F-1 Engine bells (5x)
+      const f1Geo = new THREE.ConeGeometry(1.6, 3.5, 24, 1, true);
+      const f1Offsets = [[0,-21,0], [2.6,-21,2.6], [-2.6,-21,2.6], [2.6,-21,-2.6], [-2.6,-21,-2.6]];
+      f1Offsets.forEach(pos => {
+        const bell = new THREE.Mesh(f1Geo, engineMat);
+        bell.position.set(...pos);
+        s1Group.add(bell);
+      });
+      // 4 Fins
+      for(let a=0; a<4; a++) {
+        const fin = new THREE.Mesh(new THREE.BoxGeometry(0.3, 4, 3), blackMat);
+        fin.position.set(Math.cos(a * Math.PI/2) * 5.8, -18, Math.sin(a * Math.PI/2) * 5.8);
+        fin.rotation.y = a * Math.PI/2;
+        s1Group.add(fin);
+      }
+      s1Group.position.y = -22;
+      saturnGroup.add(s1Group);
+      saturnParts["s1"] = s1Group;
+
+      // S-II Second Stage
+      const s2Group = new THREE.Group();
+      const s2Body = new THREE.Mesh(new THREE.CylinderGeometry(5.0, 5.0, 24, 32), whiteMat);
+      s2Group.add(s2Body);
+      const s2Ring = new THREE.Mesh(new THREE.TorusGeometry(5.05, 0.2, 16, 32), blackMat);
+      s2Ring.rotation.x = Math.PI / 2;
+      s2Group.add(s2Ring);
+      s2Group.position.y = 11;
+      saturnGroup.add(s2Group);
+      saturnParts["s2"] = s2Group;
+
+      // S-IVB Third Stage
+      const s3Group = new THREE.Group();
+      const s3Body = new THREE.Mesh(new THREE.CylinderGeometry(3.3, 3.3, 17, 32), whiteMat);
+      s3Group.add(s3Body);
+      s3Group.position.y = 31.5;
+      saturnGroup.add(s3Group);
+      saturnParts["s3"] = s3Group;
+
+      // Instrument Unit (IU)
+      const iuGroup = new THREE.Group();
+      const iuBody = new THREE.Mesh(new THREE.CylinderGeometry(3.3, 3.3, 2.5, 32), blackMat);
+      iuGroup.add(iuBody);
+      iuGroup.position.y = 41.25;
+      saturnGroup.add(iuGroup);
+      saturnParts["iu"] = iuGroup;
+
+      // Command & Service Module (CSM) + Lunar Adapter
+      const csmGroup = new THREE.Group();
+      const sla = new THREE.Mesh(new THREE.CylinderGeometry(2.0, 3.3, 8, 32), whiteMat);
+      sla.position.y = 4;
+      csmGroup.add(sla);
+      const sm = new THREE.Mesh(new THREE.CylinderGeometry(2.0, 2.0, 6, 32), metalMat);
+      sm.position.y = 11;
+      csmGroup.add(sm);
+      const cm = new THREE.Mesh(new THREE.ConeGeometry(1.9, 3.5, 32), whiteMat);
+      cm.position.y = 15.75;
+      csmGroup.add(cm);
+      csmGroup.position.y = 42.5;
+      saturnGroup.add(csmGroup);
+      saturnParts["csm"] = csmGroup;
+
+      // Launch Escape System (LES)
+      const lesGroup = new THREE.Group();
+      const tower = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.7, 12, 16), metalMat);
+      tower.position.y = 6;
+      lesGroup.add(tower);
+      const motor = new THREE.Mesh(new THREE.ConeGeometry(0.8, 4, 16), whiteMat);
+      motor.position.y = 14;
+      lesGroup.add(motor);
+      lesGroup.position.y = 60;
+      saturnGroup.add(lesGroup);
+      saturnParts["les"] = lesGroup;
+    }
+
+    /* =========================================================================
+       BUILD PROCEDURAL SPACE SHUTTLE (STS-107)
+       ========================================================================= */
+    const shuttleParts = {};
+    function buildSpaceShuttle() {
+      // External Tank (ET)
+      const etGroup = new THREE.Group();
+      const etCyl = new THREE.Mesh(new THREE.CylinderGeometry(4.2, 4.2, 38, 32), orangeMat);
+      etGroup.add(etCyl);
+      const etNose = new THREE.Mesh(new THREE.ConeGeometry(4.2, 9, 32), orangeMat);
+      etNose.position.y = 23.5;
+      etGroup.add(etNose);
+      etGroup.position.set(0, 5, 0);
+      shuttleGroup.add(etGroup);
+      shuttleParts["et"] = etGroup;
+
+      // Twin Solid Rocket Boosters (SRBs)
+      const srbGroup = new THREE.Group();
+      [-6.5, 6.5].forEach(x => {
+        const srbBody = new THREE.Mesh(new THREE.CylinderGeometry(1.85, 1.85, 42, 32), whiteMat);
+        srbBody.position.set(x, 4, 0);
+        srbGroup.add(srbBody);
+        const srbNose = new THREE.Mesh(new THREE.ConeGeometry(1.85, 5, 32), blackMat);
+        srbNose.position.set(x, 27.5, 0);
+        srbGroup.add(srbNose);
+        const srbNozzle = new THREE.Mesh(new THREE.ConeGeometry(1.7, 3, 24, 1, true), engineMat);
+        srbNozzle.position.set(x, -18, 0);
+        srbGroup.add(srbNozzle);
+      });
+      shuttleGroup.add(srbGroup);
+      shuttleParts["srb"] = srbGroup;
+
+      // Orbiter Columbia
+      const orbGroup = new THREE.Group();
+      const orbBody = new THREE.Mesh(new THREE.CylinderGeometry(2.6, 2.6, 26, 32), whiteMat);
+      orbBody.rotation.x = Math.PI / 2;
+      orbBody.position.set(0, 0, 5.5);
+      orbGroup.add(orbBody);
+      // Delta Wings
+      const wingShape = new THREE.Shape();
+      wingShape.moveTo(0, 0);
+      wingShape.lineTo(12, -14);
+      wingShape.lineTo(-12, -14);
+      wingShape.closePath();
+      const wingGeo = new THREE.ExtrudeGeometry(wingShape, { depth: 0.6, bevelEnabled: false });
+      const wings = new THREE.Mesh(wingGeo, blackMat);
+      wings.rotation.x = -Math.PI / 2;
+      wings.position.set(0, -6, 5.2);
+      orbGroup.add(wings);
+      // Vertical Stabilizer
+      const tail = new THREE.Mesh(new THREE.BoxGeometry(0.5, 8, 8), whiteMat);
+      tail.position.set(0, 4, 16);
+      tail.rotation.x = -0.4;
+      orbGroup.add(tail);
+      // Cockpit Window
+      const windowMesh = new THREE.Mesh(new THREE.BoxGeometry(2.2, 1.2, 0.5), glassMat);
+      windowMesh.position.set(0, 1.8, -6);
+      windowMesh.rotation.x = 0.5;
+      orbGroup.add(windowMesh);
+
+      orbGroup.position.set(0, 5, 2.5);
+      shuttleGroup.add(orbGroup);
+      shuttleParts["orb"] = orbGroup;
+
+      // RS-25 Main Engines (3x SSME Cluster)
+      const ssmeGroup = new THREE.Group();
+      const ssmeOffsets = [[0, 2, 19], [-1.2, -0.8, 19], [1.2, -0.8, 19]];
+      ssmeOffsets.forEach(pos => {
+        const bell = new THREE.Mesh(new THREE.ConeGeometry(1.1, 2.8, 20, 1, true), engineMat);
+        bell.rotation.x = Math.PI / 2;
+        bell.position.set(...pos);
+        ssmeGroup.add(bell);
+      });
+      ssmeGroup.position.set(0, 5, 2.5);
+      shuttleGroup.add(ssmeGroup);
+      shuttleParts["ssme"] = ssmeGroup;
+    }
+
+    buildSaturnV();
+    buildSpaceShuttle();
+
+    /* =========================================================================
+       MISSION & STAGE MANAGEMENT
+       ========================================================================= */
+    function switchMission(missionId) {
+      currentMission = missionId;
+      playBeep(660, 0.05);
+
+      document.getElementById('btn-m1').classList.toggle('active', missionId === 1);
+      document.getElementById('btn-m2').classList.toggle('active', missionId === 2);
+
+      saturnGroup.visible = (missionId === 1);
+      shuttleGroup.visible = (missionId === 2);
+
+      const m = MISSIONS[missionId];
+      document.getElementById('dock-title').innerText = `${m.name.toUpperCase()} STAGES`;
+      document.getElementById('veh-name').innerText = m.vehicle;
+
+      renderStageList();
+      resetCamera();
+    }
+
+    function renderStageList() {
+      const m = MISSIONS[currentMission];
+      const listEl = document.getElementById('stage-list');
+      listEl.innerHTML = '';
+
+      m.stages.forEach(st => {
+        const isVer = verifiedStages.has(st.id);
+        const item = document.createElement('div');
+        item.className = `stage-item ${selectedStageId === st.id ? 'selected' : ''}`;
+        item.innerHTML = `
+          <div>
+            <div class="stage-name">${st.name}</div>
+            <div style="font-size:10px; color:var(--text-dim);">${st.tag}</div>
+          </div>
+          <span class="stage-badge ${isVer ? 'verified' : ''}">${isVer ? 'VERIFIED' : 'UNVERIFIED'}</span>
+        `;
+        item.onclick = () => selectStage(st);
+        listEl.appendChild(item);
+      });
+
+      updateRolloutStatus();
+    }
+
+    let highlightBox = null;
+    function selectStage(st) {
+      selectedStageId = st.id;
+      verifiedStages.add(st.id);
+      playBeep(980, 0.07);
+
+      renderStageList();
+
+      // Show specs
+      document.getElementById('selected-module-badge').innerText = st.tag;
+      let html = `<div style="font-size:13px; font-weight:700; color:#fff; margin-bottom:6px;">${st.name}</div>`;
+      html += `<div class="spec-grid">`;
+      for(const [k, v] of Object.entries(st.specs)) {
+        html += `<div class="spec-cell"><div class="spec-label">${k}</div><div class="spec-val">${v}</div></div>`;
+      }
+      html += `</div>`;
+      document.getElementById('spec-content').innerHTML = html;
+
+      // Animate Camera to focus on stage
+      const targetY = st.meshOffset;
+      const targetDist = Math.max(30, st.meshHeight * 1.5);
+      
+      const startPos = camera.position.clone();
+      const endPos = new THREE.Vector3(targetDist * 0.9, targetY + 6, targetDist * 1.1);
+      const startTarget = controls.target.clone();
+      const endTarget = new THREE.Vector3(0, targetY, 0);
+
+      let t = 0;
+      function animateCam() {
+        t += 0.05;
+        if(t <= 1) {
+          camera.position.lerpVectors(startPos, endPos, t);
+          controls.target.lerpVectors(startTarget, endTarget, t);
+          requestAnimationFrame(animateCam);
+        }
+      }
+      animateCam();
+
+      // Highlight Box Wireframe
+      if (highlightBox) scene.remove(highlightBox);
+      const boxGeo = new THREE.BoxGeometry(16, st.meshHeight, 16);
+      const boxMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8, wireframe: true, transparent: true, opacity: 0.6 });
+      highlightBox = new THREE.Mesh(boxGeo, boxMat);
+      highlightBox.position.set(0, targetY, 0);
+      scene.add(highlightBox);
+    }
+
+    function resetCamera() {
+      if (highlightBox) { scene.remove(highlightBox); highlightBox = null; }
+      selectedStageId = null;
+      camera.position.set(0, 15, 110);
+      controls.target.set(0, 10, 0);
+      document.getElementById('spec-content').innerHTML = `<div style="color:var(--text-dim); font-size:12px;">Select a stage above to inspect NASA engineering telemetry.</div>`;
+    }
+
+    function updateRolloutStatus() {
+      const m = MISSIONS[currentMission];
+      const count = m.stages.filter(s => verifiedStages.has(s.id)).length;
+      document.getElementById('dock-counter').innerText = `${count}/${m.stages.length} VERIFIED`;
+
+      const btn = document.getElementById('rollout-btn');
+      if (count === m.stages.length) {
+        btn.classList.add('ready');
+        btn.innerText = "AUTHORIZE ROLLOUT (READY)";
+        document.getElementById('veh-status').innerText = "VERIFIED • READY FOR ROLLOUT";
+        document.getElementById('veh-status').style.color = "var(--green)";
+      } else {
+        btn.classList.remove('ready');
+        btn.innerText = `AUTHORIZE ROLLOUT (${count}/${m.stages.length})`;
+        document.getElementById('veh-status').innerText = "STANDBY FOR ROLLOUT";
+        document.getElementById('veh-status').style.color = "var(--orange)";
+      }
+    }
+
+    function triggerRollout() {
+      const m = MISSIONS[currentMission];
+      if (m.stages.filter(s => verifiedStages.has(s.id)).length === m.stages.length) {
+        playBeep(1200, 0.2, 'triangle');
+        alert(`🚀 ROLLOUT GRANTED! ${m.vehicle} is cleared to roll to Launch Complex 39A!\nAll systems nominal.`);
+      } else {
+        playBeep(300, 0.15, 'sawtooth');
+        alert("⚠️ Rollout Blocked: Inspect and verify all rocket stages before requesting rollout authorization.");
+      }
+    }
+
+    /* =========================================================================
+       SPLASH SCREEN & TUTORIAL MODAL
+       ========================================================================= */
+    let splashProgress = 0;
+    const progressFill = document.getElementById('progress-fill');
+    const loadPct = document.getElementById('load-pct');
+    const splashVideo = document.getElementById('splash-video');
+
+    // Attempt video playback
+    splashVideo.play().catch(() => {});
+
+    const loadInterval = setInterval(() => {
+      splashProgress += 2.5;
+      if (splashProgress > 100) splashProgress = 100;
+      progressFill.style.width = splashProgress + '%';
+      loadPct.innerText = Math.floor(splashProgress) + '%';
+      if (splashProgress >= 100) {
+        clearInterval(loadInterval);
+        setTimeout(finishSplash, 400);
+      }
+    }, 80);
+
+    function finishSplash() {
+      clearInterval(loadInterval);
+      const splash = document.getElementById('splash-screen');
+      splash.style.opacity = '0';
+      setTimeout(() => {
+        splash.style.display = 'none';
+        if (localStorage.getItem('HUSTLE_TUTORIAL_SEEN') !== 'true') {
+          document.getElementById('briefing-modal').style.display = 'flex';
+        }
+      }, 700);
+    }
+
+    function closeBriefing() {
+      if (document.getElementById('dont-show-again').checked) {
+        localStorage.setItem('HUSTLE_TUTORIAL_SEEN', 'true');
+      }
+      document.getElementById('briefing-modal').style.display = 'none';
+      playBeep(880, 0.1);
+    }
+
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') finishSplash();
+    });
+
+    // MET Clock
+    let metSeconds = 0;
+    setInterval(() => {
+      metSeconds++;
+      const h = String(Math.floor(metSeconds / 3600)).padStart(2, '0');
+      const m = String(Math.floor((metSeconds % 3600) / 60)).padStart(2, '0');
+      const s = String(metSeconds % 60).padStart(2, '0');
+      document.getElementById('met-clock').innerText = `${h}:${m}:${s}`;
+    }, 1000);
+
+    /* =========================================================================
+       LIVE RELOAD (SSE Client - Connects to Python Server)
+       ========================================================================= */
+    try {
+      const evtSource = new EventSource("/events");
+      evtSource.onmessage = function(e) {
+        if (e.data === "reload") {
+          console.log("[LiveServer] File change detected! Reloading...");
+          window.location.reload();
+        }
+      };
+    } catch(e) {}
+
+    /* =========================================================================
+       ANIMATION LOOP
+       ========================================================================= */
+    switchMission(1);
+
+    function animate() {
+      requestAnimationFrame(animate);
+
+      // Subtle slow rotation
+      if (!selectedStageId) {
+        saturnGroup.rotation.y += 0.002;
+        shuttleGroup.rotation.y += 0.002;
+      }
+
+      // Highlight wireframe pulsing
+      if (highlightBox) {
+        highlightBox.rotation.y += 0.01;
+        const pulse = 0.5 + Math.sin(Date.now() * 0.006) * 0.3;
+        highlightBox.material.opacity = pulse;
+      }
+
+      controls.update();
+      renderer.render(scene, camera);
+    }
+    animate();
+
+    // Window Resize
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+  </script>
+</body>
+</html>

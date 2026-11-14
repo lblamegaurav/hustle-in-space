@@ -1,0 +1,10 @@
+{
+  "name": "hustle-in-space-live",
+  "version": "1.0.0",
+  "description": "Live simulation viewer and 3D palette for Hustle in Space",
+  "scripts": {
+    "start": "python3 live_server.py 3000",
+    "dev": "python3 live_server.py 3000",
+    "live": "python3 live_server.py 3000"
+  }
+}
