@@ -4,19 +4,16 @@ using UnityEngine;
 
 namespace SpaceSim.Editor
 {
-    [InitializeOnLoad]
+    namespace SpaceSim.Editor
+{
     public static class ForceScriptCompilation
     {
-        static ForceScriptCompilation()
-        {
-            EditorApplication.delayCall += Request;
-        }
-
-        [MenuItem("Space Sim/Force Script Recompile", priority = 30)]
+        [UnityEditor.MenuItem("Space Sim/Force Script Recompile", priority = 30)]
         public static void Request()
         {
-            Debug.Log("[Space Sim] Requesting CompilationPipeline.RequestScriptCompilation()...");
-            CompilationPipeline.RequestScriptCompilation();
+            UnityEngine.Debug.Log("[Space Sim] Requesting CompilationPipeline.RequestScriptCompilation()...");
+            UnityEditor.Compilation.CompilationPipeline.RequestScriptCompilation();
         }
     }
+}
 }

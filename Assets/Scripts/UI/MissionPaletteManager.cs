@@ -89,9 +89,29 @@ namespace SpaceSim.UI
                 saturnVRoot = GameObject.Find("SaturnV_Apollo11");
                 if (saturnVRoot == null)
                 {
-                    // Build Saturn V procedurally via SaturnVBuilder
-                    saturnVRoot = SaturnV.SaturnVBuilder.BuildCompleteRocket();
+                    var saturnPrefab = Resources.Load<GameObject>("Models/SaturnV_Authentic");
+                    if (saturnPrefab != null)
+                    {
+                        saturnVRoot = Instantiate(saturnPrefab, new Vector3(0f, 5.0f, 0f), Quaternion.identity);
+                        saturnVRoot.name = "SaturnV_Apollo11";
+                    }
+                    else
+                    {
+                        saturnVRoot = SaturnV.SaturnVBuilder.BuildCompleteRocket();
+                    }
                 }
+            }
+
+            if (saturnVRoot != null)
+            {
+                var rb = saturnVRoot.GetComponent<Rigidbody>();
+                if (rb == null) rb = saturnVRoot.AddComponent<Rigidbody>();
+                rb.mass = 2970000f;
+                rb.isKinematic = true;
+                rb.useGravity = false;
+
+                var fc = saturnVRoot.GetComponent<SaturnV.SaturnVFlightController>();
+                if (fc == null) fc = saturnVRoot.AddComponent<SaturnV.SaturnVFlightController>();
             }
 
             if (spaceShuttleRoot == null)
@@ -99,8 +119,47 @@ namespace SpaceSim.UI
                 spaceShuttleRoot = GameObject.Find("SpaceShuttle_Stack");
                 if (spaceShuttleRoot == null)
                 {
-                    // Build Space Shuttle procedurally via SpaceShuttleBuilder
-                    spaceShuttleRoot = SpaceShuttleBuilder.BuildCompleteShuttle();
+                    var shuttlePrefab = Resources.Load<GameObject>("Models/SpaceShuttle_FullStack");
+                    if (shuttlePrefab != null)
+                    {
+                        spaceShuttleRoot = Instantiate(shuttlePrefab, new Vector3(180f, 5.0f, 0f), Quaternion.identity);
+                        spaceShuttleRoot.name = "SpaceShuttle_Stack";
+                    }
+                    else
+                    {
+                        spaceShuttleRoot = SpaceShuttleBuilder.BuildCompleteShuttle();
+                        spaceShuttleRoot.transform.position = new Vector3(180f, 5.0f, 0f);
+                    }
+                }
+                else
+                {
+                    // Guarantee Pad 39B separation so it NEVER overlaps Saturn V!
+                    spaceShuttleRoot.transform.position = new Vector3(180f, 5.0f, 0f);
+                }
+            }
+
+            // Setup Crawler and VAB if not in scene
+            var crawler = GameObject.Find("Crawler_Transporter");
+            if (crawler == null)
+            {
+                var crawlerPrefab = Resources.Load<GameObject>("Models/Crawler");
+                if (crawlerPrefab != null)
+                {
+                    crawler = Instantiate(crawlerPrefab, new Vector3(0f, 0f, -40f), Quaternion.identity);
+                    crawler.name = "Crawler_Transporter";
+                    crawler.transform.localScale = new Vector3(4.5f, 4.5f, 4.5f);
+                }
+            }
+
+            var vab = GameObject.Find("VehicleAssemblyBuilding_VAB");
+            if (vab == null)
+            {
+                var vabPrefab = Resources.Load<GameObject>("Models/VAB");
+                if (vabPrefab != null)
+                {
+                    vab = Instantiate(vabPrefab, new Vector3(0f, 0f, -250f), Quaternion.identity);
+                    vab.name = "VehicleAssemblyBuilding_VAB";
+                    vab.transform.localScale = new Vector3(10f, 10f, 10f);
                 }
             }
 
@@ -163,7 +222,7 @@ namespace SpaceSim.UI
                 if (spaceShuttleRoot != null) spaceShuttleRoot.SetActive(true);
                 if (orbitCamera != null)
                 {
-                    orbitCamera.pivotPoint = new Vector3(0, 24f, 0);
+                    orbitCamera.pivotPoint = new Vector3(180f, 24f, 0);
                     orbitCamera.distance = 55f;
                 }
             }
@@ -298,7 +357,10 @@ namespace SpaceSim.UI
             // 2. Camera Framing in 3D Viewport
             if (orbitCamera != null)
             {
-                Vector3 focusPivot = new Vector3(0, mod.cameraFocusY, 0);
+                var targetGo = FindStageGameObject(mod.gameObjectName);
+                float y = (targetGo != null) ? targetGo.transform.position.y : mod.cameraFocusY;
+                float x = (currentMissionId == "SpaceShuttle") ? 180f : 0f;
+                Vector3 focusPivot = new Vector3(x, y, 0);
                 orbitCamera.FocusOn(focusPivot, mod.cameraDistance);
             }
 
@@ -309,11 +371,66 @@ namespace SpaceSim.UI
             UpdateVerificationProgress();
         }
 
+        private GameObject FindStageGameObject(string goName)
+        {
+            if (string.IsNullOrEmpty(goName)) return null;
+
+            if (_cachedStageObjects.TryGetValue(goName, out GameObject exact)) return exact;
+
+            string lower = goName.ToLower();
+            foreach (var kvp in _cachedStageObjects)
+            {
+                string keyLower = kvp.Key.ToLower();
+                if (keyLower == lower) return kvp.Value;
+
+                // Saturn V stages
+                if ((lower.Contains("sic") || lower.Contains("stage1")) &&
+                    (keyLower.Contains("first stage") || keyLower.Contains("sic") || keyLower.Contains("stage1")))
+                    return kvp.Value;
+
+                if ((lower.Contains("sii") || lower.Contains("stage2")) &&
+                    (keyLower.Contains("second stage") || keyLower.Contains("sii") || keyLower.Contains("stage2")))
+                    return kvp.Value;
+
+                if ((lower.Contains("sivb") || lower.Contains("stage3")) &&
+                    (keyLower.Contains("third stage") || keyLower.Contains("sivb") || keyLower.Contains("stage3")))
+                    return kvp.Value;
+
+                if ((lower.Contains("iu") || lower.Contains("instrument")) &&
+                    (keyLower.Contains("instrument") || keyLower.Contains("third stage")))
+                    return kvp.Value;
+
+                if ((lower.Contains("lm") || lower.Contains("lunar") || lower.Contains("sla")) &&
+                    (keyLower.Contains("lunar") || keyLower.Contains("lem") || keyLower.Contains("placeholder") || keyLower.Contains("adapter")))
+                    return kvp.Value;
+
+                if ((lower.Contains("csm") || lower.Contains("capsule") || lower.Contains("apollo")) &&
+                    (keyLower.Contains("apollo capsule") || keyLower.Contains("capsule") || keyLower.Contains("sm")))
+                    return kvp.Value;
+
+                if ((lower.Contains("les") || lower.Contains("escape")) &&
+                    (keyLower.Contains("escape")))
+                    return kvp.Value;
+
+                // Space Shuttle
+                if ((lower.Contains("orbiter") || lower.Contains("columbia") || lower.Contains("shut")) &&
+                    (keyLower.Contains("sm_shuttle") || keyLower.Contains("orbiter") || keyLower.Contains("shut")))
+                    return kvp.Value;
+
+                if ((lower.Contains("srb") || lower.Contains("tank") || lower.Contains("booster")) &&
+                    (keyLower.Contains("tank") || keyLower.Contains("srb") || keyLower.Contains("booster")))
+                    return kvp.Value;
+            }
+
+            return null;
+        }
+
         private void HighlightStageObject(string goName)
         {
             if (string.IsNullOrEmpty(goName)) return;
 
-            if (_cachedStageObjects.TryGetValue(goName, out GameObject targetGo))
+            var targetGo = FindStageGameObject(goName);
+            if (targetGo != null)
             {
                 if (_pulseCoroutine != null) StopCoroutine(_pulseCoroutine);
                 _pulseCoroutine = StartCoroutine(PulseStageHighlight(targetGo));
@@ -325,14 +442,16 @@ namespace SpaceSim.UI
             var renderers = go.GetComponentsInChildren<MeshRenderer>(true);
             if (renderers.Length == 0) yield break;
 
-            var originalColors = new Dictionary<Material, Color>();
+            var originalColors = new Dictionary<Material, (string prop, Color color)>();
             foreach (var r in renderers)
             {
                 foreach (var m in r.materials)
                 {
-                    if (!originalColors.ContainsKey(m) && m.HasProperty("_Color"))
+                    if (m == null || originalColors.ContainsKey(m)) continue;
+                    string prop = m.HasProperty("_BaseColor") ? "_BaseColor" : (m.HasProperty("_Color") ? "_Color" : null);
+                    if (prop != null)
                     {
-                        originalColors[m] = m.color;
+                        originalColors[m] = (prop, m.GetColor(prop));
                     }
                 }
             }
@@ -349,9 +468,10 @@ namespace SpaceSim.UI
                 foreach (var kvp in originalColors)
                 {
                     var m = kvp.Key;
-                    if (m != null && m.HasProperty("_Color"))
+                    if (m != null)
                     {
-                        m.color = Color.Lerp(kvp.Value, Color.cyan, pulse * 0.6f);
+                        Color pulseColor = Color.Lerp(kvp.Value.color, new Color(0.0f, 0.9f, 1f, 1f), pulse * 0.65f);
+                        m.SetColor(kvp.Value.prop, pulseColor);
                     }
                 }
                 yield return null;
@@ -360,9 +480,9 @@ namespace SpaceSim.UI
             // Restore original colors
             foreach (var kvp in originalColors)
             {
-                if (kvp.Key != null && kvp.Key.HasProperty("_Color"))
+                if (kvp.Key != null)
                 {
-                    kvp.Key.color = kvp.Value;
+                    kvp.Key.SetColor(kvp.Value.prop, kvp.Value.color);
                 }
             }
         }
@@ -410,20 +530,10 @@ namespace SpaceSim.UI
 
             if (currentMissionId == "SaturnV")
             {
-                Debug.Log("<color=cyan><b>[Mission 1]</b></color> Saturn V rollout authorized! Transferring to launch complex...");
-                // Start Rollout Sequence: Close Palette, switch camera to Launch Complex & enable Flight Controller
+                Debug.Log("<color=cyan><b>[Mission 1]</b></color> Saturn V rollout authorized! Starting Crawler rollout cinematic...");
                 if (blenderPalettePanel != null) blenderPalettePanel.SetActive(false);
 
-                var flightCtrl = saturnVRoot.GetComponent<SaturnV.SaturnVFlightController>();
-                if (flightCtrl != null)
-                {
-                    flightCtrl.enabled = true;
-                }
-
-                if (orbitCamera != null)
-                {
-                    orbitCamera.FocusOn(new Vector3(0, 15f, 0), 120f, 2.0f);
-                }
+                StartCoroutine(RunRolloutCinematic());
             }
             else // Mission 2: Space Shuttle
             {
@@ -447,6 +557,92 @@ namespace SpaceSim.UI
                     }
                 }
             }
+        }
+
+        private IEnumerator RunRolloutCinematic()
+        {
+            var crawler = GameObject.Find("Crawler_Transporter");
+            var mainCam = Camera.main;
+
+            // Rollout HUD Banner
+            GameObject bannerGo = null;
+            if (mainCanvas != null)
+            {
+                bannerGo = new GameObject("RolloutBanner");
+                bannerGo.transform.SetParent(mainCanvas.transform, false);
+                var rect = bannerGo.AddComponent<RectTransform>();
+                rect.anchorMin = new Vector2(0.5f, 0.85f);
+                rect.anchorMax = new Vector2(0.5f, 0.85f);
+                rect.sizeDelta = new Vector2(700, 80);
+
+                var bannerImg = bannerGo.AddComponent<Image>();
+                bannerImg.color = new Color(0.04f, 0.08f, 0.14f, 0.92f);
+
+                var bannerTextGo = new GameObject("Text");
+                bannerTextGo.transform.SetParent(bannerGo.transform, false);
+                var bText = bannerTextGo.AddComponent<Text>();
+                bText.font = Resources.GetBuiltinResource<Font>("Arial.ttf");
+                bText.fontSize = 15;
+                bText.alignment = TextAnchor.MiddleCenter;
+                bText.color = Color.cyan;
+                bText.text = "<b><size=17><color=#FFD54F>CRAWLER-TRANSPORTER ROLLOUT IN PROGRESS</color></size></b>\nTransferring Saturn V & Mobile Launcher to Launch Complex 39A (0.9 mph / 1.4 km/h)";
+
+                var bTextRect = bannerTextGo.GetComponent<RectTransform>();
+                bTextRect.anchorMin = Vector2.zero;
+                bTextRect.anchorMax = Vector2.one;
+                bTextRect.offsetMin = Vector2.zero;
+                bTextRect.offsetMax = Vector2.zero;
+            }
+
+            if (orbitCamera != null)
+            {
+                orbitCamera.enabled = false;
+            }
+
+            Vector3 startCamPos = new Vector3(45f, 15f, -60f);
+            Vector3 endCamPos = new Vector3(65f, 25f, -80f);
+
+            float duration = 4.0f;
+            float t = 0f;
+
+            while (t < duration)
+            {
+                t += Time.deltaTime;
+                float progress = t / duration;
+
+                if (mainCam != null)
+                {
+                    mainCam.transform.position = Vector3.Lerp(startCamPos, endCamPos, progress);
+                    mainCam.transform.LookAt(new Vector3(0, 35f, 0));
+                }
+
+                if (crawler != null)
+                {
+                    crawler.transform.position = Vector3.Lerp(new Vector3(0, 0, -40f), new Vector3(0, 0, 0f), progress);
+                }
+
+                yield return null;
+            }
+
+            if (bannerGo != null) Destroy(bannerGo);
+
+            if (orbitCamera != null)
+            {
+                orbitCamera.enabled = true;
+                orbitCamera.FocusOn(new Vector3(0, 20f, 0), 110f, 1.5f);
+            }
+
+            if (saturnVRoot != null)
+            {
+                var flightCtrl = saturnVRoot.GetComponent<SaturnV.SaturnVFlightController>();
+                if (flightCtrl != null)
+                {
+                    flightCtrl.enabled = true;
+                }
+            }
+
+            SpaceSimAudio.Instance.PlayVerifiedChime();
+            Debug.Log("<color=green>[Mission 1]</color> Saturn V locked on Pad 39A. Ready for terminal ignition countdown!");
         }
 
         // ==========================================
